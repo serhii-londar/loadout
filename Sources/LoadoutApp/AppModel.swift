@@ -1188,11 +1188,25 @@ final class AppModel {
         }
     }
 
+    /// Commands that would be gaps if the assistant loaded markdown commands. They are not in
+    /// `gaps`, so the sync report has to name them explicitly rather than silently dropping them.
+    private func commandsNotOffered(to assistant: Assistant) -> Int {
+        guard !assistant.supportsCommands else { return 0 }
+        return items.filter {
+            $0.kind == .command && $0.origin == .personal && $0.enabled
+                && !$0.assistants.isEmpty && !$0.assistants.contains(assistant.id)
+        }.count
+    }
+
     /// Gives an assistant every skill, command and subagent it is missing, in one go.
     func syncAll(to assistant: Assistant) {
         let missing = gaps(for: assistant)
+        let skipped = commandsNotOffered(to: assistant)
+        let skippedNote = skipped == 0
+            ? ""
+            : " \(skipped) command\(skipped == 1 ? "" : "s") skipped: \(assistant.label) doesn't load markdown commands."
         guard !missing.isEmpty else {
-            statusMessage = "\(assistant.label) already has everything."
+            statusMessage = "\(assistant.label) already has everything it loads." + skippedNote
             return
         }
         var failures: [String] = []
@@ -1209,7 +1223,7 @@ final class AppModel {
         }
         reload()
         if failures.isEmpty {
-            statusMessage = "\(assistant.label) now loads \(missing.count) \(missing.count == 1 ? "item" : "items")."
+            statusMessage = "\(assistant.label) now loads \(missing.count) \(missing.count == 1 ? "item" : "items")." + skippedNote
             errorMessage = nil
         } else {
             errorMessage = "Couldn't sync: \(failures.joined(separator: ", "))."

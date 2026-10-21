@@ -8,7 +8,7 @@ extension Selection {
     var rowHint: String {
         switch self {
         case .skills: return "Skills Claude and other assistants load automatically when they're relevant"
-        case .commands: return "Slash commands available to Claude in every project"
+        case .commands: return "Slash commands available to the assistants that load them, in every project"
         case .agents: return "Subagents Claude can delegate a task to"
         case .mcp: return "MCP servers configured for Claude"
         case .plugins: return "Plugins installed through Claude Code, and their enabled state"
