@@ -47,10 +47,10 @@ The versions are what a release is tagged as; between tags, `main` is what is be
   backup), and the plugin's or the repository's own is not touched.
 
 - **Commands are only offered to assistants that load them.** Claude Code, Codex, Cursor, opencode
-  and Factory are known to read markdown commands, and any assistant whose commands folder
-  already exists is offered one too. Gemini's commands are TOML and Copilot has none, so they no
-  longer get a command they would never run, or a folder invented for it. *Sync all with …* skips
-  them as well.
+  and Factory are known to read markdown commands, and any other assistant whose commands folder
+  already exists is offered one too. Gemini's commands are TOML and Copilot has none, so they are
+  never offered a command they would never run, even if such a folder exists — and no folder is
+  invented for them. *Sync all with …* skips them as well.
 
 ### Fixed
 

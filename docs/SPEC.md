@@ -31,13 +31,16 @@ A native Mac app for viewing and managing what coding assistants load: skills, c
 | Disabled skills | `~/.claude/skills-off/<name>/SKILL.md` |
 | Project skills | `<repo>/.claude/skills/<name>/SKILL.md` |
 | Plugin skills | `~/.claude/plugins/cache/<mkt>/<plugin>/<version>/skills/<name>/SKILL.md` |
-| Commands | `~/.claude/commands/*.md`, `<repo>/.claude/commands/*.md`, `<plugin>/commands/*.md` |
+| Commands | markdown under each assistant's commands folder: `~/.claude/commands/*.md`, `~/.codex/prompts/*.md`, `~/.cursor/commands/*.md`, `~/.config/opencode/command(s)/*.md`, `~/.factory/commands/*.md`, plus project and plugin equivalents |
 | Agents | `~/.claude/agents/*.md`, `<repo>/.claude/agents/*.md`, `<plugin>/agents/*.md` |
 | Installed plugins | `~/.claude/plugins/installed_plugins.json` |
 | Enabled plugins | `enabledPlugins` in `~/.claude/settings.json` and `settings.local.json` |
 | MCP servers | `mcpServers` in `~/.claude.json` (global and per project) |
 | Projects | `~/Projects/INDEX.md` — markdown tables, first column holding the relative path |
 | Usage | `~/.claude/projects/**/*.jsonl` |
+
+Gemini's commands are TOML and Copilot has none, so neither is offered a markdown command; any
+other assistant whose commands folder already exists is offered one.
 
 Usage signals, by item type:
 

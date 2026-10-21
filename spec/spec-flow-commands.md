@@ -9,9 +9,10 @@ tags: [flow, commands, multi-assistant, app, macos, swift]
 
 # Introduction
 
-Loadout's Commands tab lists slash commands — one markdown file each — from `~/.claude/commands`,
-from a project's `.claude/commands`, and from installed plugins. It shows what they say, how often
-they were used, and lets the user edit, save, reveal and delete them.
+Loadout's Commands tab lists slash commands — one markdown file each — from every assistant that
+loads them: `~/.claude/commands`, `~/.codex/prompts`, `~/.cursor/commands`, opencode's
+`command(s)` folder, `~/.factory/commands`, plus project and plugin equivalents. It shows what
+they say, how often they were used, and lets the user edit, save, reveal and delete them.
 
 Everything else the app learned to do for skills, it has not learned here. A command cannot be
 switched off without deleting it. A new one cannot be created. Only Claude's half of the machine is
@@ -91,11 +92,14 @@ and nothing ever overwritten. The button reads "New" and offers what the current
 ## 5. The other assistants
 
 Skills are read from every assistant on the machine and merged into one row, with dots showing who
-loads what — seeing the gap is the point. Commands are read from Claude only, so a tab that says 29
-is quietly claiming to be the whole picture.
+loads what — seeing the gap is the point. Before this work, commands were read from Claude only,
+so a tab that says 29 was quietly claiming to be the whole picture.
 
 Codex keeps its own in `~/.codex/prompts`, as markdown files, named after the file in the same way.
-Loadout reads them, merges by name, and shows the dots.
+Loadout reads them, merges by name, and shows the dots. Cursor, opencode and Factory have markdown
+command folders too, and are merged the same way. Gemini's commands are TOML and Copilot has none,
+so neither is offered a markdown command; any other assistant whose commands folder already exists
+is offered one.
 
 Sharing one across assistants is offered, and says what it costs. A command's frontmatter is Claude
 Code's vocabulary: `allowed-tools` and `disable-model-invocation` mean nothing to Codex and sit
@@ -110,6 +114,8 @@ does not travel.
   does not carry over, before doing it.
 - **AC10.13** `[T]` An assistant with no prompts directory is not an error: the tab works with
   whatever exists.
+- **AC10.14** `[T]` An assistant known to read only a non-markdown command format, or to have no
+  command folder, is not offered a markdown command, even when its commands folder exists.
 
 ## 6. Out of scope here
 
