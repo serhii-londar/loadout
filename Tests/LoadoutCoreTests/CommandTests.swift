@@ -276,7 +276,7 @@ extension CommandTests {
 
     func testKnownAssistantsAndOnesAlreadyUsingACommandsFolderAreOffered() throws {
         let fixture = Fixture()
-        try fm.createDirectory(at: fixture.paths.home.appendingPathComponent(".codex/prompts"), withIntermediateDirectories: true)
+        try fm.createDirectory(at: fixture.paths.codexSkills, withIntermediateDirectories: true)
         try fm.createDirectory(at: fixture.paths.home.appendingPathComponent(".hermes/skills"), withIntermediateDirectories: true)
         let found = AssistantRegistry.discover(paths: fixture.paths) { _ in nil }
         XCTAssertTrue(found.first { $0.id == "codex" }!.supportsCommands, "known")
@@ -284,5 +284,136 @@ extension CommandTests {
         try fm.createDirectory(at: fixture.paths.home.appendingPathComponent(".hermes/commands"), withIntermediateDirectories: true)
         let hermes = AssistantRegistry.discover(paths: fixture.paths) { _ in nil }.first { $0.id == "hermes" }!
         XCTAssertTrue(hermes.supportsCommands, "somebody already uses its folder")
+    }
+
+    func testGeminiWithItsTomlCommandsFolderIsNotOfferedMarkdownCommands() throws {
+        let fixture = Fixture()
+        command("ship", in: fixture)
+        try fm.createDirectory(at: fixture.paths.home.appendingPathComponent(".gemini/skills"), withIntermediateDirectories: true)
+        try fm.createDirectory(at: fixture.paths.home.appendingPathComponent(".gemini/commands"), withIntermediateDirectories: true)
+        try "prompt = \"hi\"".write(
+            to: fixture.paths.home.appendingPathComponent(".gemini/commands/hi.toml"),
+            atomically: true, encoding: .utf8
+        )
+        let gemini = AssistantRegistry.discover(paths: fixture.paths) { _ in nil }.first { $0.id == "gemini" }!
+        XCTAssertFalse(gemini.supportsCommands)
+
+        XCTAssertThrowsError(try Mutations(paths: fixture.paths).shareCommand(item("ship", in: fixture), with: gemini))
+        XCTAssertFalse(fm.fileExists(atPath: gemini.commandsRoot.appendingPathComponent("ship.md").path))
+    }
+
+    func testAnOldCopilotCommandsFolderDoesNotMakeItSupported() throws {
+        let fixture = Fixture()
+        command("ship", in: fixture)
+        try fm.createDirectory(at: fixture.paths.home.appendingPathComponent(".copilot/skills"), withIntermediateDirectories: true)
+        try fm.createDirectory(at: fixture.paths.home.appendingPathComponent(".copilot/commands"), withIntermediateDirectories: true)
+        let copilot = AssistantRegistry.discover(paths: fixture.paths) { _ in nil }.first { $0.id == "copilot" }!
+        XCTAssertFalse(copilot.supportsCommands)
+
+        XCTAssertThrowsError(try Mutations(paths: fixture.paths).shareCommand(item("ship", in: fixture), with: copilot))
+        XCTAssertFalse(fm.fileExists(atPath: copilot.commandsRoot.appendingPathComponent("ship.md").path))
+    }
+
+    func testARegularFileNamedCommandsIsNotAFolder() throws {
+        let fixture = Fixture()
+        try fm.createDirectory(at: fixture.paths.home.appendingPathComponent(".hermes/skills"), withIntermediateDirectories: true)
+        try "not a folder".write(
+            to: fixture.paths.home.appendingPathComponent(".hermes/commands"),
+            atomically: true, encoding: .utf8
+        )
+        let hermes = AssistantRegistry.discover(paths: fixture.paths) { _ in nil }.first { $0.id == "hermes" }!
+        XCTAssertFalse(hermes.supportsCommands)
+    }
+
+    func testLegacyMarkdownInGeminiIsNotReportedAsLoaded() throws {
+        let fixture = Fixture()
+        fixture.command("ship")
+        try fm.createDirectory(at: fixture.paths.home.appendingPathComponent(".gemini/skills"), withIntermediateDirectories: true)
+        try fm.createDirectory(at: fixture.paths.home.appendingPathComponent(".gemini/commands"), withIntermediateDirectories: true)
+        try "legacy".write(
+            to: fixture.paths.home.appendingPathComponent(".gemini/commands/ship.md"),
+            atomically: true, encoding: .utf8
+        )
+
+        let ship = InventoryScanner(paths: fixture.paths).scanAll().items
+            .first { $0.name == "ship" && $0.kind == .command }!
+        XCTAssertFalse(ship.assistants.contains("gemini"))
+        XCTAssertEqual(ship.realCopyIn, ["claude"])
+    }
+
+    func testCopyingACommandToAnUnsupportedAssistantIsRefused() throws {
+        let fixture = Fixture()
+        command("ship", in: fixture)
+        try fm.createDirectory(at: fixture.paths.home.appendingPathComponent(".copilot/skills"), withIntermediateDirectories: true)
+        let copilot = AssistantRegistry.discover(paths: fixture.paths) { _ in nil }.first { $0.id == "copilot" }!
+
+        XCTAssertThrowsError(try Mutations(paths: fixture.paths).copy(item("ship", in: fixture), to: copilot))
+        XCTAssertFalse(fm.fileExists(atPath: copilot.commandsRoot.path))
+    }
+
+    func testAnUnknownAssistantWithOnlyACommandsFolderIsDiscovered() throws {
+        let fixture = Fixture()
+        try fm.createDirectory(at: fixture.paths.home.appendingPathComponent(".zzz/commands"), withIntermediateDirectories: true)
+        try "do the thing".write(
+            to: fixture.paths.home.appendingPathComponent(".zzz/commands/ship.md"),
+            atomically: true, encoding: .utf8
+        )
+
+        let zzz = AssistantRegistry.discover(paths: fixture.paths) { _ in nil }.first { $0.id == "zzz" }
+        XCTAssertNotNil(zzz)
+        XCTAssertTrue(zzz!.supportsCommands)
+    }
+
+    func testDroidWithoutACommandsFolderIsNotOfferedCommands() throws {
+        let fixture = Fixture()
+        try fm.createDirectory(at: fixture.paths.home.appendingPathComponent(".droid/skills"), withIntermediateDirectories: true)
+        let droid = AssistantRegistry.discover(paths: fixture.paths) { _ in nil }.first { $0.id == "droid" }!
+        XCTAssertFalse(droid.supportsCommands)
+    }
+
+    func testEnablingAClaudeCommandDoesNotBringBackALegacyGeminiCopy() throws {
+        let fixture = Fixture()
+        let claudeOff = fixture.paths.claude.appendingPathComponent("commands-off")
+        let geminiOff = fixture.paths.home.appendingPathComponent(".gemini/commands-off")
+        try fm.createDirectory(at: claudeOff, withIntermediateDirectories: true)
+        try fm.createDirectory(at: geminiOff, withIntermediateDirectories: true)
+        try "real".write(to: claudeOff.appendingPathComponent("ship.md"), atomically: true, encoding: .utf8)
+        try "legacy".write(to: geminiOff.appendingPathComponent("ship.md"), atomically: true, encoding: .utf8)
+
+        let parked = Item(
+            id: "command:personal:ship", name: "ship", kind: .command, origin: .personal,
+            path: claudeOff.appendingPathComponent("ship.md"), enabled: false, assistants: ["claude"]
+        )
+        try Mutations(paths: fixture.paths).setCommand(parked, enabled: true)
+
+        XCTAssertTrue(fm.fileExists(atPath: fixture.paths.claude.appendingPathComponent("commands/ship.md").path))
+        XCTAssertFalse(fm.fileExists(atPath: fixture.paths.home.appendingPathComponent(".gemini/commands/ship.md").path))
+        XCTAssertTrue(fm.fileExists(atPath: geminiOff.appendingPathComponent("ship.md").path))
+    }
+
+    func testCodexUsesPromptsEvenWhenACommandsFolderExists() throws {
+        let fixture = Fixture()
+        try fm.createDirectory(at: fixture.paths.codexSkills, withIntermediateDirectories: true)
+        try fm.createDirectory(at: fixture.paths.home.appendingPathComponent(".codex/commands"), withIntermediateDirectories: true)
+        try fm.createDirectory(at: fixture.paths.home.appendingPathComponent(".codex/prompts"), withIntermediateDirectories: true)
+
+        let codex = AssistantRegistry.discover(paths: fixture.paths) { _ in nil }.first { $0.id == "codex" }!
+        XCTAssertEqual(codex.commandsRoot.lastPathComponent, "prompts")
+    }
+
+    func testEnablingACommandParkedOnlyInCopilotIsRefused() throws {
+        let fixture = Fixture()
+        try fm.createDirectory(at: fixture.paths.home.appendingPathComponent(".copilot/skills"), withIntermediateDirectories: true)
+        try fm.createDirectory(at: fixture.paths.home.appendingPathComponent(".copilot/commands-off"), withIntermediateDirectories: true)
+        try "do the thing".write(
+            to: fixture.paths.home.appendingPathComponent(".copilot/commands-off/ship.md"),
+            atomically: true, encoding: .utf8
+        )
+
+        let parked = InventoryScanner(paths: fixture.paths).scanAll().items
+            .first { $0.name == "ship" && $0.kind == .command && !$0.enabled }!
+        XCTAssertThrowsError(try Mutations(paths: fixture.paths).setCommand(parked, enabled: true))
+        XCTAssertFalse(fm.fileExists(atPath: fixture.paths.home.appendingPathComponent(".copilot/commands").path))
+        XCTAssertTrue(fm.fileExists(atPath: fixture.paths.home.appendingPathComponent(".copilot/commands-off/ship.md").path))
     }
 }

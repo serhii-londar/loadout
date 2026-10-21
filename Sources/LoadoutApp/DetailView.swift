@@ -937,7 +937,7 @@ struct DetailView: View {
                         Text("\(loaded) loaded of \(assistants.count)")
                             .font(.system(size: 11))
                             .foregroundStyle(V2.textFaint)
-                            .help("How many of the assistants below have this \(item.kind.briefingNoun), out of the ones Loadout found on this Mac and Settings keeps in view")
+                            .help("How many of the assistants below have this \(item.kind.briefingNoun), out of the ones Loadout found on this Mac, Settings keeps in view, and that can hold this kind of item")
                     }
                 }
                 // Four up is the design's shape, but only while a cell has room for a name and a
@@ -953,7 +953,15 @@ struct DetailView: View {
                         assistantCell(assistant, item: item)
                     }
                 }
-                if let hint = sharingHint(item) {
+                if assistants.isEmpty {
+                    Text("No visible assistant \(item.kind == .mcp ? "has" : "loads") this \(item.kind.briefingNoun).")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(V2.textMid)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 10)
+                }
+                if !assistants.isEmpty, let hint = sharingHint(item) {
                     Text(hint)
                         .font(.system(size: 11.5))
                         .foregroundStyle(V2.textMid)

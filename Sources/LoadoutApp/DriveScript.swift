@@ -136,6 +136,9 @@ enum DriveScript {
             guard let assistant = model.assistants.first(where: { $0.id == argument }) else {
                 return "no such assistant"
             }
+            if verb == "share", item.kind == .command, !assistant.supportsCommands {
+                return "\(assistant.label) doesn't load markdown commands"
+            }
             model.setAssistant(assistant, on: item, present: verb == "share")
             return "ok"
         case "remove-plugin":

@@ -305,9 +305,12 @@ enum Walkthrough {
                 model.select(model.items.first { $0.kind == .command && $0.assistants == ["claude"] }?.id)
             },
             Step(hold: 2.6) { model in
-                guard let item = model.selected,
-                      let missing = model.assistants.first(where: { !item.assistants.contains($0.id) })
-                else { return }
+                guard let item = model.selected else { return }
+                let candidates = model.assistants.filter {
+                    !item.assistants.contains($0.id)
+                        && (item.kind != .command || $0.supportsCommands)
+                }
+                guard let missing = candidates.first else { return }
                 model.setAssistant(missing, on: item, present: true)
             },
             Step(hold: 1.6) { model in

@@ -6,7 +6,8 @@ import XCTest
 final class RemoveAndCopyTests: XCTestCase {
     private let fm = FileManager.default
 
-    /// Claude Code, plus two assistants with folders (`zzz`, `yyy`) and opencode with its agent folder.
+    /// Claude Code, plus four assistants with folders (`zzz`, `yyy`, `cursor`, `codex`) and opencode
+    /// with its agent folder.
     private func machine() -> Fixture {
         let fixture = Fixture()
         for id in ["zzz", "yyy", "cursor", "codex"] {
