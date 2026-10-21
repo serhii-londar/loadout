@@ -46,11 +46,23 @@
   copy. `swift test`: 446 tests, 0 failures. F8 (caching) remains deferred as a performance-only
   refactor; app-level `AppModel` tests remain unavailable in the current test target.
 
+## Outcome
+
+- Commits on `fix/command-support-findings`: `c137fa2` (core support rule, scanner, enable path,
+  Codex/Droid, discovery, tests), `d67e4ba` (UI, sync status, demo/script filters), `7c98ac0`
+  (changelog, docs, this plan), plus a final docs/UI polish commit.
+- `swift build` succeeds; `swift test` passes with **446 tests, 0 failures**.
+- F1–F7 and F9–F13 are fixed. F8 remains deferred; Antigravity’s command format and app-level
+  sync-all tests are documented follow-ups.
+- Final self-review of the diff found no remaining critical or important issues. A fresh reviewer
+  subagent was dispatched twice, but the harness interrupted it before it returned a verdict; the
+  final verification is the full test suite plus this self-review.
+
 ## Decisions
 
 - **F1:** `AssistantRegistry.noMarkdownCommands = ["gemini", "copilot"]`. Known format wins over folder existence. Antigravity is Gemini-based but its command format is unconfirmed; leave it out of both sets and note it for a follow-up rather than guessing.
 - **F5:** Remove `"droid"` from `commandAssistants`. The commit/CHANGELOG name Factory; `~/.droid/commands` is unconfirmed. Unknown `droid` still benefits from the folder fallback if it really has a markdown folder.
-- **F2:** Live scanning skips assistants that do not support commands. Parked commands stay visible so a legacy file can still be deleted; enabling one is refused by F3.
+- **F2:** Live scanning skips assistants that do not support commands, so a legacy `.md` there is not claimed as loaded. Parked commands stay visible so a legacy file can still be deleted; enabling one is refused by F3. A live legacy link is hidden from the card, but deleting the item still removes every link because `delete` scans all command roots.
 - **F8:** Deferred. Caching folder state on `Assistant` is a worthwhile performance refactor, but it changes the discovery/initializer surface and is not a correctness bug. The doc keeps it visible for a follow-up.
 - **F6:** App-level `AppModel` tests are not available in the current test target; core predicate/scanner/mutation tests cover the logic. The sync-all status line is verified by build and manual reasoning, not a unit test.
 
@@ -110,7 +122,7 @@ func testARegularFileNamedCommandsIsNotAFolder() throws {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `swift test --filter CommandTests`  
+Run: `swift test --filter CommandTests`
 Expected: the Gemini and Copilot tests fail because `supportsCommands` is true; the regular-file test fails because `fileExists` is true.
 
 - [ ] **Step 3: Implement the rule**
@@ -150,7 +162,7 @@ private func existingFolder(among names: [String]) -> URL? {
 
 - [ ] **Step 4: Run the tests**
 
-Run: `swift test --filter CommandTests`  
+Run: `swift test --filter CommandTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -190,7 +202,7 @@ func testLegacyMarkdownInGeminiIsNotReportedAsLoaded() throws {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `swift test --filter CommandTests.testLegacyMarkdownInGeminiIsNotReportedAsLoaded`  
+Run: `swift test --filter CommandTests.testLegacyMarkdownInGeminiIsNotReportedAsLoaded`
 Expected: FAIL because `ship.assistants` contains `gemini`.
 
 - [ ] **Step 3: Filter live command scanning**
@@ -209,7 +221,7 @@ Leave the `commands-off` scan over all assistants so a parked legacy file still 
 
 - [ ] **Step 4: Run the test and the command suite**
 
-Run: `swift test --filter CommandTests`  
+Run: `swift test --filter CommandTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -249,7 +261,7 @@ func testEnablingACommandParkedOnlyInCopilotIsRefused() throws {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `swift test --filter CommandTests.testEnablingACommandParkedOnlyInCopilotIsRefused`  
+Run: `swift test --filter CommandTests.testEnablingACommandParkedOnlyInCopilotIsRefused`
 Expected: FAIL because the file is moved to `~/.copilot/commands`.
 
 - [ ] **Step 3: Filter enabling roots and report the refusal**
@@ -303,12 +315,12 @@ if enabled, item.kind == .command, copies.isEmpty {
 
 - [ ] **Step 4: Run the test**
 
-Run: `swift test --filter CommandTests.testEnablingACommandParkedOnlyInCopilotIsRefused`  
+Run: `swift test --filter CommandTests.testEnablingACommandParkedOnlyInCopilotIsRefused`
 Expected: PASS, with no `~/.copilot/commands` created.
 
 - [ ] **Step 5: Run the whole suite**
 
-Run: `swift test`  
+Run: `swift test`
 Expected: all tests pass.
 
 - [ ] **Step 6: Commit**
@@ -341,7 +353,7 @@ func testCodexUsesPromptsEvenWhenACommandsFolderExists() throws {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `swift test --filter CommandTests.testCodexUsesPromptsEvenWhenACommandsFolderExists`  
+Run: `swift test --filter CommandTests.testCodexUsesPromptsEvenWhenACommandsFolderExists`
 Expected: FAIL because `commandsRoot` picks `commands`.
 
 - [ ] **Step 3: Add the explicit mapping**
@@ -359,7 +371,7 @@ Simplify the fallback in `commandsRoot` to `names.first ?? "commands"`; the Code
 
 - [ ] **Step 4: Run the tests**
 
-Run: `swift test --filter CommandTests`  
+Run: `swift test --filter CommandTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -388,7 +400,7 @@ func testDroidWithoutACommandsFolderIsNotOfferedCommands() throws {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `swift test --filter CommandTests.testDroidWithoutACommandsFolderIsNotOfferedCommands`  
+Run: `swift test --filter CommandTests.testDroidWithoutACommandsFolderIsNotOfferedCommands`
 Expected: FAIL because `droid` is in `commandAssistants`.
 
 - [ ] **Step 3: Remove `droid` from the known set**
@@ -403,7 +415,7 @@ Add a comment that Droid’s command format/home is unconfirmed; it still gets t
 
 - [ ] **Step 4: Run the tests**
 
-Run: `swift test --filter CommandTests`  
+Run: `swift test --filter CommandTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -438,7 +450,7 @@ func testAnUnknownAssistantWithOnlyACommandsFolderIsDiscovered() throws {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `swift test --filter CommandTests.testAnUnknownAssistantWithOnlyACommandsFolderIsDiscovered`  
+Run: `swift test --filter CommandTests.testAnUnknownAssistantWithOnlyACommandsFolderIsDiscovered`
 Expected: FAIL because discovery requires a skills folder or a known descriptor.
 
 - [ ] **Step 3: Include command folders in discovery**
@@ -457,7 +469,7 @@ Expose the helper as `static func isDirectory(_:)` (internal, not private) or du
 
 - [ ] **Step 4: Run the tests**
 
-Run: `swift test --filter CommandTests`  
+Run: `swift test --filter CommandTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -497,7 +509,7 @@ In `testKnownAssistantsAndOnesAlreadyUsingACommandsFolderAreOffered`, remove the
 
 - [ ] **Step 4: Run the tests**
 
-Run: `swift test`  
+Run: `swift test`
 Expected: all pass.
 
 - [ ] **Step 5: Commit**
@@ -545,7 +557,7 @@ if skipped > 0 {
 
 - [ ] **Step 3: Build**
 
-Run: `swift build`  
+Run: `swift build`
 Expected: success.
 
 - [ ] **Step 4: Commit**
@@ -577,7 +589,7 @@ Add Codex/Cursor/opencode/Factory paths to `docs/SPEC.md:34` and correct the “
 
 - [ ] **Step 4: Build**
 
-Run: `swift build`  
+Run: `swift build`
 Expected: success.
 
 - [ ] **Step 5: Commit**
@@ -611,7 +623,7 @@ Before `model.setAssistant` for `share`, return a clear string if the item is a 
 
 - [ ] **Step 3: Build**
 
-Run: `swift build`  
+Run: `swift build`
 Expected: success.
 
 - [ ] **Step 4: Commit**
@@ -625,7 +637,7 @@ git commit -m "chore: keep demos and scripts on command-capable assistants"
 
 - [ ] **Step 1: Run the full suite**
 
-Run: `swift test`  
+Run: `swift test`
 Expected: all tests pass.
 
 - [ ] **Step 2: Check the diff for unintended changes**

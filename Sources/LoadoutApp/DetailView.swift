@@ -961,7 +961,7 @@ struct DetailView: View {
                         .padding(.horizontal, 13)
                         .padding(.vertical, 10)
                 }
-                if let hint = sharingHint(item) {
+                if !assistants.isEmpty, let hint = sharingHint(item) {
                     Text(hint)
                         .font(.system(size: 11.5))
                         .foregroundStyle(V2.textMid)
