@@ -53,18 +53,20 @@ public struct Assistant: Identifiable, Hashable, Sendable {
     /// convention when none does yet.
     public var commandsRoot: URL {
         let names = AssistantRegistry.commandFolders[id] ?? ["commands", "prompts"]
-        return existingFolder(among: names) ?? configHome.appendingPathComponent(
-            id == "codex" ? "prompts" : (names.first ?? "commands")
-        )
+        return existingFolder(among: names)
+            ?? configHome.appendingPathComponent(names.first ?? "commands")
     }
 
     /// Whether sharing a command with this assistant does anything. True for the assistants known
     /// to read markdown commands, and for any whose commands folder is already there — somebody is
-    /// using it, whatever the table knows. Everyone else is not offered a command, rather than
-    /// being handed a file in a folder they never read.
+    /// using it, whatever the table knows.
+    ///
+    /// Known formats win over the folder heuristic: Gemini reads TOML and Copilot reads none, so a
+    /// folder that exists for either is not evidence that a markdown file would load.
     public var supportsCommands: Bool {
-        AssistantRegistry.commandAssistants.contains(id)
-            || FileManager.default.fileExists(atPath: commandsRoot.path)
+        if AssistantRegistry.commandAssistants.contains(id) { return true }
+        if AssistantRegistry.noMarkdownCommands.contains(id) { return false }
+        return Self.isDirectory(commandsRoot)
     }
 
     /// Where this assistant keeps subagent files, or nil when it keeps none Loadout knows about.
@@ -79,9 +81,16 @@ public struct Assistant: Identifiable, Hashable, Sendable {
     }
 
     private func existingFolder(among names: [String]) -> URL? {
-        let fm = FileManager.default
-        return names.map { configHome.appendingPathComponent($0) }
-            .first { fm.fileExists(atPath: $0.path) }
+        names.map { configHome.appendingPathComponent($0) }
+            .first { Self.isDirectory($0) }
+    }
+
+    /// Whether the path is a directory, following a symlink to one. A regular file called
+    /// `commands` is not a commands folder.
+    static func isDirectory(_ url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+            && isDirectory.boolValue
     }
 }
 
@@ -133,14 +142,25 @@ public enum AssistantRegistry {
 
     /// Folder names, inside an assistant's config directory, that hold its slash commands. Whichever
     /// exists wins; an id not listed uses `commands` then `prompts`.
+    ///
+    /// Codex is explicit: it reads `~/.codex/prompts`, so a stray `~/.codex/commands` must not win
+    /// just because it exists. opencode says `command` or `commands` depending on its version.
     static let commandFolders: [String: [String]] = [
+        "codex": ["prompts"],
         "opencode": ["commands", "command"],
     ]
 
     /// The assistants known to read slash commands from a folder of markdown files — their own
     /// documentation says so. Gemini's commands are TOML and Copilot has no such folder, so a
-    /// markdown file written there would be a file nobody loads.
-    static let commandAssistants: Set<String> = ["claude", "codex", "cursor", "opencode", "factory", "droid"]
+    /// markdown file written there would be a file nobody loads. Droid is not listed: it shares
+    /// Factory's `droid` binary, but `~/.droid/commands` is not documented, so it only gets the
+    /// folder fallback if it really has a markdown folder.
+    static let commandAssistants: Set<String> = ["claude", "codex", "cursor", "opencode", "factory"]
+
+    /// Assistants known to have no markdown commands: Gemini's are TOML, Copilot has none. A
+    /// folder that exists for one of these — including one an older Loadout created — is not
+    /// evidence that a markdown file would load there.
+    static let noMarkdownCommands: Set<String> = ["gemini", "copilot"]
 
     /// The assistants that read subagents from a folder of markdown files, and what that folder is
     /// called. Deliberately short: each entry is an assistant whose own documentation says it loads
@@ -204,8 +224,15 @@ public enum AssistantRegistry {
             var isDirectory: ObjCBool = false
             let hasFolder = fm.fileExists(atPath: root.path, isDirectory: &isDirectory)
                 && isDirectory.boolValue
+            // A folder of commands is as much evidence of an assistant as a folder of skills:
+            // somebody installed it and is using it. Gemini's TOML folder still counts for
+            // discovery, even though it is not offered markdown commands later.
+            let commandNames = AssistantRegistry.commandFolders[id] ?? ["commands", "prompts"]
+            let hasCommandsFolder = commandNames.contains {
+                Assistant.isDirectory(entry.appendingPathComponent($0))
+            }
             let descriptor = known[id]
-            guard hasFolder || descriptor != nil else { continue }
+            guard hasFolder || hasCommandsFolder || descriptor != nil else { continue }
 
             let appPath = app(descriptor)
             found.append(Assistant(

@@ -311,7 +311,7 @@ public struct InventoryScanner: Sendable {
         var byName: [String: Item] = [:]
         var real: [String: Set<String>] = [:]
 
-        for assistant in assistants {
+        for assistant in assistants where assistant.supportsCommands {
             for file in markdownFiles(in: assistant.commandsRoot) {
                 let stem = file.deletingPathExtension().lastPathComponent
                 if !isSymlink(file) { real[stem, default: []].insert(assistant.id) }

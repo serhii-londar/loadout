@@ -233,26 +233,57 @@ public struct Mutations: Sendable {
     /// The real file and the links pointing at it are moved in an order that never leaves a live
     /// link dangling: links first and the file last on the way out, the file first on the way back.
     private func setPersonalFile(_ item: Item, file: URL, enabled: Bool) throws -> URL {
-        var liveRoots: [URL] = AssistantRegistry.discover(paths: paths).compactMap {
-            item.kind == .agent ? $0.agentsRoot : $0.commandsRoot
+        let discovered = AssistantRegistry.discover(paths: paths)
+        var liveRoots: [URL] = discovered.compactMap {
+            switch item.kind {
+            case .agent:
+                return $0.agentsRoot
+            case .command:
+                // Switching a command back on is the only direction that creates a folder. Keep
+                // the cleanup direction broad so a link left in an unsupported assistant can
+                // still be parked, but never put a live command into one.
+                return enabled && !$0.supportsCommands ? nil : $0.commandsRoot
+            default:
+                return nil
+            }
         }
         let own = file.deletingLastPathComponent()
-        liveRoots.append(
-            own.lastPathComponent.hasSuffix("-off")
-                ? own.deletingLastPathComponent()
-                    .appendingPathComponent(String(own.lastPathComponent.dropLast(4)))
-                : own
-        )
+        let ownLive = own.lastPathComponent.hasSuffix("-off")
+            ? own.deletingLastPathComponent()
+                .appendingPathComponent(String(own.lastPathComponent.dropLast(4)))
+            : own
+        // A legacy command parked in Copilot's or Gemini's folder is not brought back to life
+        // there. If it is the only copy, the caller gets the same explanation as a share.
+        if item.kind != .command
+            || !discovered.contains(where: {
+                !$0.supportsCommands && canonicalPath($0.commandsRoot) == canonicalPath(ownLive)
+            })
+        {
+            liveRoots.append(ownLive)
+        }
 
         var seen = Set<String>()
         var copies: [(source: URL, destination: URL)] = []
-        for live in liveRoots where seen.insert(live.standardizedFileURL.path).inserted {
+        for live in liveRoots where seen.insert(canonicalPath(live)).inserted {
             let parked = live.deletingLastPathComponent()
                 .appendingPathComponent(live.lastPathComponent + "-off")
             let source = (enabled ? parked : live).appendingPathComponent(file.lastPathComponent)
             guard (try? fm.attributesOfItem(atPath: source.path)) != nil else { continue }
             copies.append((source, enabled ? live : parked))
         }
+
+        if enabled, item.kind == .command, copies.isEmpty,
+           let owner = discovered.first(where: {
+               !$0.supportsCommands
+                   && canonicalPath(
+                       $0.commandsRoot.deletingLastPathComponent()
+                           .appendingPathComponent($0.commandsRoot.lastPathComponent + "-off")
+                   ) == canonicalPath(own)
+           })
+        {
+            throw Self.noCommands(owner)
+        }
+
         let ordered = copies.sorted { a, b in
             // Links before the real file when switching off, the other way round when switching on.
             isSymlink(a.source) != isSymlink(b.source) ? isSymlink(a.source) != enabled : false
@@ -260,8 +291,8 @@ public struct Mutations: Sendable {
         var result: URL?
         for copy in ordered {
             let moved = try move(copy.source, into: copy.destination)
-            if copy.source.deletingLastPathComponent().standardizedFileURL
-                == own.standardizedFileURL || result == nil { result = moved }
+            if canonicalPath(copy.source.deletingLastPathComponent())
+                == canonicalPath(own) || result == nil { result = moved }
         }
         guard let result else { throw LoadoutError.notFound(item.name) }
         return result
@@ -1215,6 +1246,20 @@ public struct Mutations: Sendable {
         url.path.replacingOccurrences(of: paths.home.path, with: "~")
     }
 
+    /// A path that compares equal however the URL spells `/var` and `/private/var`. The temp home
+    /// in tests is reached both ways, and a folder processed twice would be moved once and then
+    /// reported as already there.
+    private func canonicalPath(_ url: URL) -> String {
+        if let canonical = try? url.resourceValues(forKeys: [.canonicalPathKey]).canonicalPath,
+           !canonical.isEmpty {
+            return canonical
+        }
+        // A live folder that does not exist yet cannot be canonicalised by Foundation; `/var` and
+        // `/private/var` are the same place on macOS.
+        let path = url.standardizedFileURL.path
+        return path.hasPrefix("/private/") ? String(path.dropFirst("/private".count)) : path
+    }
+
     /// The folders an item of this kind can sit in, switched on or parked: each assistant's own, and
     /// for skills the shared store.
     func liveAndParkedRoots(for item: Item) -> [URL] {
@@ -1230,7 +1275,7 @@ public struct Mutations: Sendable {
             return []
         }
         var seen = Set<String>()
-        live = live.filter { seen.insert($0.standardizedFileURL.path).inserted }
+        live = live.filter { seen.insert(canonicalPath($0)).inserted }
         return live + live.map {
             $0.deletingLastPathComponent().appendingPathComponent($0.lastPathComponent + "-off")
         }
